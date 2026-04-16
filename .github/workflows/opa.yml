@@ -1,0 +1,95 @@
+Opa validation · YML
+Copiar
+
+name: OPA Policy Validation
+ 
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '*.tf'
+      - 'policies/**'
+      - '.github/workflows/opa-validation.yml'
+ 
+jobs:
+  opa-policies:
+    name: Validate OPA Policies
+    runs-on: ubuntu-latest
+    
+    steps:
+      # PASO 1: Descargar código
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      
+      # PASO 2: Instalar Conftest (OPA)
+      - name: Setup Conftest
+        run: |
+          echo "Installing Conftest for OPA policies..."
+          curl -L https://github.com/open-policy-agent/conftest/releases/download/v0.46.0/conftest_0.46.0_Linux_x86_64.tar.gz | tar xz
+          sudo mv conftest /usr/local/bin/
+          conftest --version
+          echo "✅ Conftest installed successfully"
+      
+      # PASO 3: Validar que existen las políticas
+      - name: Check Policies Exist
+        run: |
+          echo "Checking for OPA policy files..."
+          if [ ! -d "policies" ]; then
+            echo "❌ ERROR: 'policies' directory not found"
+            exit 1
+          fi
+          
+          if [ ! -f "policies/no_public_ssh.rego" ]; then
+            echo "❌ ERROR: 'policies/no_public_ssh.rego' not found"
+            exit 1
+          fi
+          
+          if [ ! -f "policies/only_t2_micro.rego" ]; then
+            echo "❌ ERROR: 'policies/only_t2_micro.rego' not found"
+            exit 1
+          fi
+          
+          echo "✅ All required policy files found"
+      
+      # PASO 4: Ejecutar Política 1 - No SSH Público
+      - name: Policy 1 - Validate No Public SSH
+        run: |
+          echo "================================================"
+          echo "Policy 1: No Public SSH (0.0.0.0/0)"
+          echo "================================================"
+          echo ""
+          echo "Running: conftest test -p policies/no_public_ssh.rego *.tf"
+          echo ""
+          conftest test -p policies/no_public_ssh.rego *.tf || true
+          echo ""
+          echo "✅ Policy 1 validation completed"
+        continue-on-error: true
+      
+      # PASO 5: Ejecutar Política 2 - Solo t2.micro
+      - name: Policy 2 - Validate Only t2.micro
+        run: |
+          echo "================================================"
+          echo "Policy 2: Only t2.micro Instance Type"
+          echo "================================================"
+          echo ""
+          echo "Running: conftest test -p policies/only_t2_micro.rego *.tf"
+          echo ""
+          conftest test -p policies/only_t2_micro.rego *.tf || true
+          echo ""
+          echo "✅ Policy 2 validation completed"
+        continue-on-error: true
+      
+      # PASO 6: Ejecutar TODAS las políticas juntas
+      - name: Run All OPA Policies
+        run: |
+          echo "================================================"
+          echo "Running ALL OPA Policies"
+          echo "================================================"
+          echo ""
+          echo "Running: conftest test -p policies/ *.tf"
+          echo ""
+          conftest test -p policies/ *.tf --all-namespaces || true
+          echo ""
+          echo "✅ All OPA policies executed"
+        continue-on-error: true

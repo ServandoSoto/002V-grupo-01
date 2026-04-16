@@ -1,0 +1,124 @@
+name: Terraform Validate & Security Scan
+ 
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '*.tf'
+      - '.github/workflows/terraform-validate.yml'
+ 
+jobs:
+  terraform-validate:
+    name: Terraform Format, Lint & Validate
+    runs-on: ubuntu-latest
+    
+    steps:
+      # PASO 1: Descargar código
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      
+      # PASO 2: Instalar Terraform
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: latest
+      
+      # PASO 3: Formatear código (verificar)
+      - name: Terraform Format Check
+        run: |
+          terraform fmt -check -recursive
+          echo "✅ Terraform fmt check passed"
+        continue-on-error: true
+      
+      # PASO 4: TFLint (Análisis estático)
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v4
+      
+      - name: Run TFLint
+        run: |
+          echo "Running TFLint for static analysis..."
+          tflint --init
+          tflint -f compact
+        continue-on-error: true
+      
+      # PASO 5: Terraform Validate (Validación de sintaxis)
+      - name: Terraform Validate
+        run: |
+          echo "Validating Terraform configuration..."
+          terraform validate
+          echo "✅ Terraform validate passed"
+ 
+  security-scan:
+    name: Checkov Security Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+      # PASO 1: Descargar código
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      
+      # PASO 2: Instalar Checkov
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install Checkov
+        run: |
+          python -m pip install --upgrade pip
+          pip install checkov
+          echo "✅ Checkov installed"
+      
+      # PASO 3: Ejecutar Checkov
+      - name: Run Checkov on Terraform Files
+        run: |
+          echo "Running Checkov for security analysis..."
+          checkov -d . --framework terraform --compact --quiet
+          echo "✅ Checkov security scan completed"
+        continue-on-error: true
+ 
+  opa-policies:
+    name: OPA Policy Validation
+    runs-on: ubuntu-latest
+    
+    steps:
+      # PASO 1: Descargar código
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      
+      # PASO 2: Instalar Conftest (OPA)
+      - name: Setup Conftest
+        run: |
+          echo "Installing Conftest for OPA policies..."
+          curl -L https://github.com/open-policy-agent/conftest/releases/download/v0.46.0/conftest_0.46.0_Linux_x86_64.tar.gz | tar xz
+          sudo mv conftest /usr/local/bin/
+          echo "✅ Conftest installed"
+          fi
+        continue-on-error: true
+ 
+  terraform-docs:
+    name: Generate Terraform Documentation
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      
+      - name: Render terraform docs and push changes back to PR
+        uses: terraform-docs/gh-actions@main
+        with:
+          working-dir: .
+          output-file: README.md
+          output-method: inject
+          git-commit-message: "docs: update terraform documentation"
+          git-push: true      # PASO 3: Ejecutar OPA Policies
+          else
+            echo "⚠️  No policies folder found, skipping OPA validation"
+      - name: Run OPA Policies
+        run: |
+            echo "✅ OPA policy validation completed"
+          echo "Validating OPA policies..."
+          if [ -d "policies" ]; then
+            conftest test -p policies/ *.tf || true
+
